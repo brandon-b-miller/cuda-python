@@ -8,6 +8,7 @@ import os
 from Cython.Build import cythonize
 from setuptools import Extension, setup
 from setuptools.command.build_ext import build_ext as _build_ext
+from cuda import cccl
 
 nthreads = int(os.environ.get("CUDA_PYTHON_PARALLEL_LEVEL", os.cpu_count() // 2))
 
@@ -28,7 +29,12 @@ ext_modules = tuple(
     Extension(
         f"cuda.core.experimental.{mod.replace(os.path.sep, '.')}",
         sources=[f"cuda/core/experimental/{mod}.pyx"],
+        include_dirs=[
+            '/raid/brmiller/mambaforge/envs/cuda-python/include', 
+            '/raid/brmiller/mambaforge/envs/cuda-python/lib/python3.12/site-packages/nvidia/cuda_nvcc/include',
+            *[str(path) for path in cccl.get_include_paths().as_tuple()]],
         language="c++",
+        extra_compile_args=['-std=c++17'],
     )
     for mod in module_names
 )
@@ -46,9 +52,13 @@ setup(
         verbose=True,
         language_level=3,
         compiler_directives={"embedsignature": True, "freethreading_compatible": True},
+#        include_path=['/raid/brmiller/repos/cuda-python/cuda_bindings/cuda/bindings/', '/raid/brmiller/repos/cuda-python/cuda_core/cuda/core/experimental']
+        include_path=['.', '/raid/brmiller/repos/cuda-python/cuda_bindings/cuda/bindings/'],
+
     ),
     cmdclass={
         "build_ext": build_ext,
     },
     zip_safe=False,
+    extra_compile_args=['-std=c++17'],
 )

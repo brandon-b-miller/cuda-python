@@ -3,16 +3,19 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from __future__ import annotations
-
+from libcpp.memory cimport unique_ptr
 from cuda.core.experimental._utils.cuda_utils cimport (
     _check_driver_error as raise_if_driver_error,
     check_or_create_options,
 )
+from libcpp.memory cimport make_unique, unique_ptr
 
+from libcpp.utility cimport move
 import os
 import warnings
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Optional, Protocol, Union
+from libc.stdint cimport uint64_t
 
 if TYPE_CHECKING:
     import cuda.bindings
@@ -26,6 +29,40 @@ from cuda.core.experimental._utils.cuda_utils import (
     get_device_from_ctx,
     handle_return,
 )
+from cuda.core.experimental._cccl cimport stream, stream_ref
+cimport cyruntime as ccudart
+
+
+cdef extern from *:
+    """
+    #include "cuda/__stream/stream.h"
+
+    static cuda::stream* create_stream_helper(cudaStream_t handle) {
+        return new cuda::stream(cuda::stream::from_native_handle(handle));
+    }
+    """
+    stream* create_stream_helper(ccudart.cudaStream_t handle)
+
+
+# a dummy api that produces a cuda::stream and then from that,
+# a Stream object
+cdef extern from *:
+    """
+    #include <cuda/__stream/stream.h>
+    #include <cuda/__driver/driver_api.h> // for __streamCreateWithPriority
+    #include <cuda/__device/device_ref.h>  // for device_ref
+    #include <cuda/__device/all_devices.h>
+
+    inline cuda::stream make_test_stream()
+    {
+        cuda::stream result = cuda::stream{cuda::devices[0]};
+        return result;
+    }
+    """
+    stream make_test_stream()
+
+def make_core_stream_from_cuda_stream():
+    return Stream.from_cuda_stream(make_test_stream())
 
 
 @dataclass
@@ -113,6 +150,7 @@ cdef class Stream:
         object _priority
         object _device_id
         object _ctx_handle
+        stream* s
 
     def __init__(self, *args, **kwargs):
         raise RuntimeError(
@@ -200,6 +238,7 @@ cdef class Stream:
         else:
             self._owner = None
         self._handle = None
+        del self.s
 
     def __cuda_stream__(self) -> tuple[int, int]:
         """Return an instance of a __cuda_stream__ protocol."""
@@ -215,6 +254,46 @@ cdef class Stream:
             handle, call ``int(Stream.handle)``.
         """
         return self._handle
+
+    cdef stream_ref to_cuda_stream_ref(self):
+        """
+        Produce a nonowning cuda::stream_ref wrapping the handle owned by this object
+        """
+        cdef stream_ref sref = stream_ref(<ccudart.cudaStream_t>self._handle)
+        return sref
+
+    @staticmethod
+    cdef Stream from_cuda_stream(stream s):
+        """
+        Accept ownership of a cuda::stream
+        """
+        cdef Stream st = Stream.__new__(Stream)
+        st._handle = driver.CUstream(<uint64_t>s.release())
+        st._owner = None
+        st._builtin = False
+        st._nonblocking = None  # delayed
+        st._priority = None  # delayed
+        st._device_id = None  # delayed
+        st._ctx_handle = None  # delayed
+        return st
+
+    cdef stream* _cuda_stream_ptr(self):
+        return create_stream_helper(<ccudart.cudaStream_t>self._handle)
+
+
+#    cdef stream to_cuda_stream(self):
+#        return stream.from_native_handle(<ccudart.cudaStream_t>self._handle)
+
+        #cdef stream* s = new stream(stream.from_native_handle(<ccudart.cudaStream_t>self._handle))
+        #s[0] = stream.from_native_handle(<ccudart.cudaStream_t>self._handle)
+        #self.s = s
+        #return s
+        #cdef stream* s = new stream()
+        #return s
+        
+    #cdef unique_ptr[stream] create_stream_from_handle(self):
+    #    return  move(make_unique[stream](move(stream.from_native_handle(<ccudart.cudaStream_t>self._handle))))
+
 
     @property
     def is_nonblocking(self) -> bool:
@@ -381,8 +460,14 @@ cdef class Stream:
         return GraphBuilder._init(stream=self, is_stream_owner=False)
 
 
-LEGACY_DEFAULT_STREAM = Stream._legacy_default()
-PER_THREAD_DEFAULT_STREAM = Stream._per_thread_default()
+   
+# c-only python objects, not public
+cdef Stream C_LEGACY_DEFAULT_STREAM = Stream._legacy_default()
+cdef Stream C_PER_THREAD_DEFAULT_STREAM = Stream._per_thread_default()
+
+# standard python objects, public
+LEGACY_DEFAULT_STREAM = C_LEGACY_DEFAULT_STREAM
+PER_THREAD_DEFAULT_STREAM = C_PER_THREAD_DEFAULT_STREAM
 
 
 def default_stream():
@@ -400,4 +485,6 @@ def default_stream():
     if use_ptds:
         return PER_THREAD_DEFAULT_STREAM
     else:
-        return LEGACY_DEFAULT_STREAM
+        return C_LEGACY_DEFAULT_STREAM
+
+
