@@ -31,6 +31,37 @@ from cuda.core.experimental._graph import GraphBuilder
 from cuda.core.experimental._utils.cuda_utils import (
     driver,
 )
+from libcpp.memory cimport make_unique, unique_ptr
+from libcpp.utility cimport move
+from libc.stdint cimport uint64_t
+from cuda.core.experimental._cccl cimport stream, stream_ref
+cimport cuda.bindings.cyruntime as ccudart
+
+
+cdef extern from *:
+    """
+    #include "cuda/__stream/stream.h"
+    #include <cuda/__driver/driver_api.h> // for __streamCreateWithPriority
+    #include <cuda/__device/device_ref.h>  // for device_ref
+    #include <cuda/__device/all_devices.h>
+
+    static cuda::stream* create_stream_helper(cudaStream_t handle) {
+        return new cuda::stream(cuda::stream::from_native_handle(handle));
+    }
+    
+    inline cuda::stream make_test_stream()
+    {
+        cuda::stream result = cuda::stream{cuda::devices[0]};
+        return result;
+    }
+
+    """
+    stream* create_stream_helper(ccudart.cudaStream_t handle)
+    stream make_test_stream()
+
+
+def make_core_stream_from_cuda_stream():
+    return Stream.from_cuda_stream(make_test_stream())
 
 
 @dataclass
@@ -122,6 +153,47 @@ cdef class Stream:
             "Stream objects cannot be instantiated directly. "
             "Please use Device APIs (create_stream) or other Stream APIs (from_handle)."
         )
+
+
+    cdef stream_ref to_cuda_stream_ref(self):
+        """
+        Produce a nonowning cuda::stream_ref wrapping the handle owned by this object
+        """
+        cdef stream_ref sref = stream_ref(<ccudart.cudaStream_t>self._handle)
+        return sref
+
+    @staticmethod
+    cdef Stream from_cuda_stream(stream s):
+        """
+        Accept ownership of a cuda::stream
+        """
+        cdef Stream st = Stream.__new__(Stream)
+        st._handle = <cydriver.CUstream>(<uint64_t>s.release())
+        st._owner = None
+        st._builtin = False
+        st._nonblocking = -1  # Use -1 for lazy init like other methods
+        st._priority = INT32_MIN  # Use INT32_MIN for lazy init
+        st._device_id = cydriver.CU_DEVICE_INVALID  # Use proper invalid constant
+        st._ctx_handle = CU_CONTEXT_INVALID  # Use proper invalid constant
+        return st
+    
+    cdef stream* _cuda_stream_ptr(self):
+        return create_stream_helper(<ccudart.cudaStream_t>self._handle)
+
+
+    #cdef stream to_cuda_stream(self):
+    #    return stream.from_native_handle(<ccudart.cudaStream_t>self._handle)
+
+        #cdef stream* s = new stream(stream.from_native_handle(<ccudart.cudaStream_t>self._handle))
+        #s[0] = stream.from_native_handle(<ccudart.cudaStream_t>self._handle)
+        #self.s = s
+        #return s
+        #cdef stream* s = new stream()
+        #return s
+        
+    #cdef unique_ptr[stream] create_stream_from_handle(self):
+    #    return  move(make_unique[stream](move(stream.from_native_handle(<ccudart.cudaStream_t>self._handle))))
+ 
 
     @classmethod
     def _legacy_default(cls):

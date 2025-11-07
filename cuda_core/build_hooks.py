@@ -23,6 +23,13 @@ build_sdist = _build_meta.build_sdist
 get_requires_for_build_sdist = _build_meta.get_requires_for_build_sdist
 
 
+extra_include_paths = [
+    "/raid/brmiller/installs/anaconda/envs/cuda-python/lib/python3.12/site-packages/nvidia/cu13/include",
+    "/raid/brmiller/installs/anaconda/envs/cuda-python/lib/python3.12/site-packages/cuda/cccl/headers/include",
+    "/raid/brmiller/installs/anaconda/envs/cuda-python/lib/python3.12/site-packages/cuda/cccl/headers/include",
+    "/raid/brmiller/installs/anaconda/envs/cuda-python/lib/python3.12/site-packages/cuda/cccl/headers/include",
+]
+
 @functools.cache
 def _get_proper_cuda_bindings_major_version() -> str:
     # for local development (with/without build isolation)
@@ -88,8 +95,11 @@ def _build_cuda_core():
         Extension(
             f"cuda.core.experimental.{mod.replace(os.path.sep, '.')}",
             sources=[f"cuda/core/experimental/{mod}.pyx"],
-            include_dirs=list(os.path.join(root, "include") for root in get_cuda_paths()),
+            include_dirs=list(os.path.join(root, "include") for root in get_cuda_paths()) + extra_include_paths,
             language="c++",
+            libraries=['cudart'],
+            library_dirs=['/usr/local/cuda/lib64/'],
+            runtime_library_dirs=['/usr/local/cuda/lib64/']
         )
         for mod in module_names
     )

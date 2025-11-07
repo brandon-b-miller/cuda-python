@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from cuda.bindings cimport cydriver
+from cuda.core.experimental._cccl cimport stream, stream_ref
 
 
 cdef cydriver.CUstream _try_to_get_stream_ptr(obj: IsStreamT) except*
@@ -22,6 +23,12 @@ cdef class Stream:
     cpdef close(self)
     cdef int _get_context(self) except?-1 nogil
     cdef int _get_device_and_context(self) except?-1
+    cdef stream_ref to_cuda_stream_ref(self)
+
+    @staticmethod
+    cdef Stream from_cuda_stream(stream s)
+    cdef stream* _cuda_stream_ptr(self)
+
 
 
 cdef Stream default_stream()
