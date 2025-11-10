@@ -40,6 +40,10 @@ public:
   	stream_ = std::move(s);
   }
 
+  cuda::stream get_stream() {
+  	return std::move(stream_);
+  }
+
   StreamTester(const StreamTester&) = delete;
   StreamTester& operator=(const StreamTester&) = delete;
 
@@ -77,6 +81,10 @@ cuda::stream_ref get_global_stream_ref()
 
 void set_global_stream(cuda::stream s) {
   g_tester->set_stream(std::move(s));
+}
+
+cuda::stream get_global_stream() {
+  return std::move(g_tester->get_stream());
 }
 
 } // extern "C"

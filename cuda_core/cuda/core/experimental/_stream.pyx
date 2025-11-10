@@ -39,7 +39,7 @@ cimport cuda.bindings.cyruntime as ccudart
 
 
 def make_core_stream_from_cuda_stream():
-    return Stream.from_cuda_stream(make_test_stream())
+    return Stream.from_cuda_stream(get_global_stream())
 
 
 
@@ -52,17 +52,24 @@ cdef extern from *:
     stream_ref get_global_stream_ref()
     stream* create_stream_helper(ccudart.cudaStream_t handle)
     stream make_test_stream()
+    stream get_global_stream()
     void set_global_stream(stream s)
 
 cpdef Stream test_get_stream_from_cpp():
-    construct_global_stream_tester()
+#    construct_global_stream_tester()
     cdef stream_ref r = get_global_stream_ref()
     return Stream.from_cuda_stream_ref(r)
 
-
+cpdef void set_cuda_stream_from_core_stream(Stream pystream):
+    cdef stream* st = pystream.to_cuda_stream_ptr()
+    set_global_stream(move(st[0]))
 
 cpdef bool test_sink_python_stream(Stream pystream):
     return is_valid_stream(pystream.to_cuda_stream_ref())
+
+cpdef void py_construct_global_stream_tester():
+    construct_global_stream_tester()
+
 
 @dataclass
 cdef class StreamOptions:
@@ -179,9 +186,11 @@ cdef class Stream:
         st._ctx_handle = CU_CONTEXT_INVALID  # Use proper invalid constant
         return st
     
-    cdef stream* _cuda_stream_ptr(self):
+    cdef stream* to_cuda_stream_ptr(self):
         if self._owner is None:
-            return create_stream_helper(<ccudart.cudaStream_t>self._handle)
+            handle = self.handle
+            self._handle = <cydriver.CUstream>(NULL)
+            return create_stream_helper(<ccudart.cudaStream_t>handle)
         else:
             raise ValueError("Can't assume ownership of stream_ref")
 
