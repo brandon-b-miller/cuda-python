@@ -27,6 +27,8 @@ cdef class Stream:
 
     @staticmethod
     cdef Stream from_cuda_stream(stream s)
+    @staticmethod
+    cdef Stream from_cuda_stream_ref(stream_ref s)
     cdef stream* _cuda_stream_ptr(self)
 
 

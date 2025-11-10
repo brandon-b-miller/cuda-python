@@ -25,9 +25,7 @@ get_requires_for_build_sdist = _build_meta.get_requires_for_build_sdist
 
 extra_include_paths = [
     "/raid/brmiller/installs/anaconda/envs/cuda-python/lib/python3.12/site-packages/nvidia/cu13/include",
-    "/raid/brmiller/installs/anaconda/envs/cuda-python/lib/python3.12/site-packages/cuda/cccl/headers/include",
-    "/raid/brmiller/installs/anaconda/envs/cuda-python/lib/python3.12/site-packages/cuda/cccl/headers/include",
-    "/raid/brmiller/installs/anaconda/envs/cuda-python/lib/python3.12/site-packages/cuda/cccl/headers/include",
+    "/raid/brmiller/repos/cccl/libcudacxx/include"
 ]
 
 @functools.cache

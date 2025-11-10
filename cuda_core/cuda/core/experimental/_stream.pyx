@@ -38,31 +38,31 @@ from cuda.core.experimental._cccl cimport stream, stream_ref
 cimport cuda.bindings.cyruntime as ccudart
 
 
-cdef extern from *:
-    """
-    #include "cuda/__stream/stream.h"
-    #include <cuda/__driver/driver_api.h> // for __streamCreateWithPriority
-    #include <cuda/__device/device_ref.h>  // for device_ref
-    #include <cuda/__device/all_devices.h>
-
-    static cuda::stream* create_stream_helper(cudaStream_t handle) {
-        return new cuda::stream(cuda::stream::from_native_handle(handle));
-    }
-    
-    inline cuda::stream make_test_stream()
-    {
-        cuda::stream result = cuda::stream{cuda::devices[0]};
-        return result;
-    }
-
-    """
-    stream* create_stream_helper(ccudart.cudaStream_t handle)
-    stream make_test_stream()
-
-
 def make_core_stream_from_cuda_stream():
     return Stream.from_cuda_stream(make_test_stream())
 
+
+
+cdef extern from *:
+    """
+    #include "external.h"
+    """
+    bint is_valid_stream(stream_ref s)
+    void construct_global_stream_tester()
+    stream_ref get_global_stream_ref()
+    stream* create_stream_helper(ccudart.cudaStream_t handle)
+    stream make_test_stream()
+    void set_global_stream(stream s)
+
+cpdef Stream test_get_stream_from_cpp():
+    construct_global_stream_tester()
+    cdef stream_ref r = get_global_stream_ref()
+    return Stream.from_cuda_stream_ref(r)
+
+
+
+cpdef bool test_sink_python_stream(Stream pystream):
+    return is_valid_stream(pystream.to_cuda_stream_ref())
 
 @dataclass
 cdef class StreamOptions:
@@ -122,6 +122,8 @@ cdef cydriver.CUstream _try_to_get_stream_ptr(obj: IsStreamT) except*:
         )
     return <cydriver.CUstream><uintptr_t>(info[1])
 
+cdef class _CPPOwner:
+    pass
 
 cdef class Stream:
     """Represent a queue of GPU operations that are executed in a specific order.
@@ -178,7 +180,37 @@ cdef class Stream:
         return st
     
     cdef stream* _cuda_stream_ptr(self):
-        return create_stream_helper(<ccudart.cudaStream_t>self._handle)
+        if self._owner is None:
+            return create_stream_helper(<ccudart.cudaStream_t>self._handle)
+        else:
+            raise ValueError("Can't assume ownership of stream_ref")
+
+    @staticmethod
+    cdef Stream from_cuda_stream_ref(stream_ref s):
+        """
+        Create a nonowning stream. Identical to a normal stream except that
+        the cudaStreamDestroy call is not issued when the python object is
+        no longer needed. 
+
+        stream views can't produce cuda::stream objects. 
+
+        """
+        cdef Stream st = Stream.__new__(Stream)
+        st._handle = <cydriver.CUstream>(<uint64_t>s.get())
+
+        # Create an owner so that close() will not call cudaStreamDestroy
+        # This represents an external owner that doesnt actually hold a
+        # reference to the stream 
+        st._owner =_CPPOwner()
+
+
+        st._builtin = False
+        st._nonblocking = -1  # Use -1 for lazy init like other methods
+        st._priority = INT32_MIN  # Use INT32_MIN for lazy init
+        st._device_id = cydriver.CU_DEVICE_INVALID  # Use proper invalid constant
+        st._ctx_handle = CU_CONTEXT_INVALID  # Use proper invalid constant
+        return st
+
 
 
     #cdef stream to_cuda_stream(self):
