@@ -1,23 +1,32 @@
 from cuda.core.experimental import Device
-from cuda.core.experimental._stream import test_sink_python_stream, set_cuda_stream_from_core_stream, py_construct_global_stream_tester, test_get_stream_from_cpp, make_core_stream_from_cuda_stream
+from cuda.core.experimental._stream import (
+    test_python_stream_to_cuda_stream_ref,
+    set_cuda_stream_from_core_stream, 
+    py_construct_global_stream_tester, 
+    test_get_stream_from_cpp, 
+    make_core_stream_from_cuda_stream
+)
 
+# instantiate a StreamTester, a c++ entity that stores a cuda::stream internally
+# instance lives on the heap and persists until containing cython extension unloads 
+py_construct_global_stream_tester()
 
 # 1. Create a python stream and test if a c++ API can use a stream::ref made from it
 dev = Device()
 dev.set_current()
-py_construct_global_stream_tester()
-
-# Test creating a python owned cuda.core.Stream, passing it to
-# c++ as a reference
 st = dev.create_stream()
 orig_handle = int(st.handle)
 
-valid = test_sink_python_stream(st)
+# Test creating a python owned cuda.core.Stream, passing it to
+# c++ as a reference
+
+valid = test_python_stream_to_cuda_stream_ref(st)
 assert valid # valled is_valid_stream 
 
 # 2. Release ownership of the stream into a persisten c++ entity
 set_cuda_stream_from_core_stream(st)
 assert int(st.handle) == 0
+del st
 
 # The c++ entity now owns the stream. Users of the original python
 # stream object going forward will encounter an invalid stream error 
@@ -29,4 +38,5 @@ st2 = test_get_stream_from_cpp()
 
 # 4. obtain ownership of a stream fully back from c++ into python
 st3 = make_core_stream_from_cuda_stream()
-breakpoint()
+del st3
+

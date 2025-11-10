@@ -39,7 +39,7 @@ cimport cuda.bindings.cyruntime as ccudart
 
 
 def make_core_stream_from_cuda_stream():
-    return Stream.from_cuda_stream(get_global_stream())
+    return Stream.from_cuda_stream(move(get_global_stream()))
 
 
 
@@ -56,7 +56,6 @@ cdef extern from *:
     void set_global_stream(stream s)
 
 cpdef Stream test_get_stream_from_cpp():
-#    construct_global_stream_tester()
     cdef stream_ref r = get_global_stream_ref()
     return Stream.from_cuda_stream_ref(r)
 
@@ -64,7 +63,7 @@ cpdef void set_cuda_stream_from_core_stream(Stream pystream):
     cdef stream* st = pystream.to_cuda_stream_ptr()
     set_global_stream(move(st[0]))
 
-cpdef bool test_sink_python_stream(Stream pystream):
+cpdef bool test_python_stream_to_cuda_stream_ref(Stream pystream):
     return is_valid_stream(pystream.to_cuda_stream_ref())
 
 cpdef void py_construct_global_stream_tester():
@@ -221,21 +220,6 @@ cdef class Stream:
         return st
 
 
-
-    #cdef stream to_cuda_stream(self):
-    #    return stream.from_native_handle(<ccudart.cudaStream_t>self._handle)
-
-        #cdef stream* s = new stream(stream.from_native_handle(<ccudart.cudaStream_t>self._handle))
-        #s[0] = stream.from_native_handle(<ccudart.cudaStream_t>self._handle)
-        #self.s = s
-        #return s
-        #cdef stream* s = new stream()
-        #return s
-        
-    #cdef unique_ptr[stream] create_stream_from_handle(self):
-    #    return  move(make_unique[stream](move(stream.from_native_handle(<ccudart.cudaStream_t>self._handle))))
- 
-
     @classmethod
     def _legacy_default(cls):
         cdef Stream self = Stream.__new__(cls)
@@ -300,8 +284,10 @@ cdef class Stream:
         """
         if self._owner is None:
             if self._handle and not self._builtin:
+                print("destroying stream!\n")
                 with nogil:
                     HANDLE_RETURN(cydriver.cuStreamDestroy(self._handle))
+                print("stream destroyed.\n")
         else:
             self._owner = None
         self._handle = <cydriver.CUstream>(NULL)

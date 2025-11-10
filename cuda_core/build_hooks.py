@@ -97,7 +97,8 @@ def _build_cuda_core():
             language="c++",
             libraries=['cudart'],
             library_dirs=['/usr/local/cuda/lib64/'],
-            runtime_library_dirs=['/usr/local/cuda/lib64/']
+            runtime_library_dirs=['/usr/local/cuda/lib64/'],
+            extra_compile_options=['-g']
         )
         for mod in module_names
     )

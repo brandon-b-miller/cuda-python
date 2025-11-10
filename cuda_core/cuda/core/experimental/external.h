@@ -7,7 +7,7 @@
 #include <cuda/__device/device_ref.h>  // for device_ref
 #include <cuda/__device/all_devices.h>
 #include <iostream>
-
+#include <optional>
 
 static cuda::stream* create_stream_helper(cudaStream_t handle) {
     return new cuda::stream(cuda::stream::from_native_handle(handle));
@@ -26,43 +26,39 @@ inline bool is_valid_stream(const ::cuda::stream_ref& s) noexcept
 
 class StreamTester {
 public:
-  StreamTester()
-    : stream_(create_and_wrap_stream()) 
-  {}
+  StreamTester() = default;  
 
-  // Return a stream_ref referring to the owned stream.
   cuda::stream_ref get_stream_ref() noexcept {
-    cuda::stream_ref r = stream_;
-    return r;
+    if (!stream_.has_value()) {
+      throw std::runtime_error("Stream not initialized");
+    }
+    return *stream_;
   }
 
   void set_stream(cuda::stream s) {
-  	stream_ = std::move(s);
+    stream_ = std::move(s);
   }
 
   cuda::stream get_stream() {
-  	return std::move(stream_);
+    if (!stream_.has_value()) {
+      throw std::runtime_error("Stream not initialized");
+    }
+    return std::move(*stream_);
   }
 
   StreamTester(const StreamTester&) = delete;
   StreamTester& operator=(const StreamTester&) = delete;
 
 private:
-  static cuda::stream create_and_wrap_stream()
-  {
-    ::cudaStream_t h;
-    std::cout << "creating stream" << std::endl;
-    ::cudaStreamCreate(&h); 
-    return cuda::stream::from_native_handle(h);
-  }
-
-  cuda::stream stream_;
+  std::optional<cuda::stream> stream_;
 };
 
 static StreamTester* g_tester = nullptr;
 
 extern "C" {
 
+// callable from python - persist a StreamTester instance
+// in heap memory.
 void construct_global_stream_tester()
 {
   if (!g_tester) g_tester = new StreamTester();
@@ -80,6 +76,7 @@ cuda::stream_ref get_global_stream_ref()
 }
 
 void set_global_stream(cuda::stream s) {
+  s.print_handle_as_int();
   g_tester->set_stream(std::move(s));
 }
 
