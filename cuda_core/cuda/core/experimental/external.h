@@ -9,7 +9,18 @@
 #include <iostream>
 #include <optional>
 
+cuda::stream debug_stream() {
+  ::cudaStream_t raw = nullptr;
+  cudaError_t cu_err = cudaStreamCreateWithFlags(&raw, cudaStreamNonBlocking);
+  if (cu_err != cudaSuccess) {
+    std::cerr << "cudaStreamCreateWithFlags failed: " << cudaGetErrorString(cu_err) << '\n';
+  }
+  cuda::stream s = cuda::stream::from_native_handle(raw);
+  return std::move(s);
+}
+
 static cuda::stream* create_stream_helper(cudaStream_t handle) {
+    std::cout << "inside create_stream_helper handle as int:" << (uint64_t)handle << std::endl;
     return new cuda::stream(cuda::stream::from_native_handle(handle));
 }
 
@@ -37,6 +48,7 @@ public:
 
   void set_stream(cuda::stream s) {
     stream_ = std::move(s);
+    std::move(debug_stream());
   }
 
   cuda::stream get_stream() {
