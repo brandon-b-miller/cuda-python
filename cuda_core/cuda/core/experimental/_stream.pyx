@@ -48,31 +48,25 @@ cdef extern from *:
     stream* create_stream_helper(ccudart.cudaStream_t handle)
     stream make_test_stream()
     stream get_global_stream()
-    stream debug_stream() 
     void set_global_stream(stream s)
-
-cpdef Stream test_get_stream_from_cpp():
-    cdef stream_ref r = get_global_stream_ref()
-    return Stream.from_cuda_stream_ref(r)
-
-cpdef void set_cuda_stream_from_core_stream(Stream pystream):
-    cdef stream* st = pystream.to_cuda_stream_ptr()
-    print(f"inside set_cuda_stream_from_core_stream: {int(pystream.handle)}")
-    set_global_stream(move(st[0]))
-
-cpdef bool test_python_stream_to_cuda_stream_ref(Stream pystream):
-    return is_valid_stream(pystream.to_cuda_stream_ref())
 
 cpdef void py_construct_global_stream_tester():
     construct_global_stream_tester()
 
-cpdef Stream make_core_stream_from_cuda_stream():
-    #return Stream.from_cuda_stream(move(debug_stream()))
+cpdef void set_cpp_stream_from_core_stream(Stream pystream):
+    cdef stream* st = pystream.to_cuda_stream_ptr()
+    set_global_stream(move(st[0]))
+
+cpdef Stream get_core_stream_from_cpp_streamref():
+    cdef stream_ref r = get_global_stream_ref()
+    return Stream.from_cuda_stream_ref(r)
+
+cpdef Stream get_core_stream_from_cpp_stream():
     return Stream.from_cuda_stream(move(get_global_stream()))
 
-cpdef void test_from_cpp_exchange():
-    hndl = <cydriver.CUstream>(<uint64_t>(move(debug_stream()).release()))
-    HANDLE_RETURN(cydriver.cuStreamDestroy(hndl))
+cpdef bool test_python_stream_to_cuda_stream_ref(Stream pystream):
+    return is_valid_stream(pystream.to_cuda_stream_ref())
+
 
 @dataclass
 cdef class StreamOptions:
@@ -289,10 +283,8 @@ cdef class Stream:
         """
         if self._owner is None:
             if self._handle and not self._builtin:
-                print("destroying stream!\n")
                 with nogil:
                     HANDLE_RETURN(cydriver.cuStreamDestroy(self._handle))
-                print("stream destroyed.\n")
         else:
             self._owner = None
         self._handle = <cydriver.CUstream>(NULL)
