@@ -31,6 +31,8 @@ cdef class Stream:
     cdef Stream from_cuda_stream_ref(stream_ref s)
     cdef stream* to_cuda_stream_ptr(self)
 
+    #@staticmethod
+    #cdef stream to_cuda_stream(self)
 
 
 cdef Stream default_stream()

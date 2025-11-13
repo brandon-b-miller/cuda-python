@@ -36,7 +36,7 @@ public:
     return *stream_;
   }
 
-  void set_stream(cuda::stream s) {
+  void set_stream(cuda::stream&& s) {
     stream_ = std::move(s);
   }
 
@@ -76,7 +76,7 @@ cuda::stream_ref get_global_stream_ref()
   return g_tester->get_stream_ref();
 }
 
-void set_global_stream(cuda::stream s) {
+void set_global_stream(cuda::stream&& s) {
   g_tester->set_stream(std::move(s));
 }
 

@@ -192,6 +192,10 @@ cdef class Stream:
         else:
             raise ValueError("Can't assume ownership of stream_ref")
 
+    #@staticmethod
+    #cdef stream to_cuda_stream(self):
+    #    return stream.from_native_handle(<ccudart.cudaStream_t>self._handle)
+
     @staticmethod
     cdef Stream from_cuda_stream_ref(stream_ref s):
         """
