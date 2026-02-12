@@ -20,10 +20,19 @@ from cuda.pathfinder._headers.find_nvidia_headers import (
 )
 from cuda.pathfinder._headers.supported_nvidia_headers import SUPPORTED_HEADERS_CTK as _SUPPORTED_HEADERS_CTK
 from cuda.pathfinder._static_libs.find_libdevice import (
+    LibdeviceNotFoundError as LibdeviceNotFoundError,
+)
+from cuda.pathfinder._static_libs.find_libdevice import (
+    LocatedLibdevice as LocatedLibdevice,
+)
+from cuda.pathfinder._static_libs.find_libdevice import (
     find_libdevice as find_libdevice,
 )
 from cuda.pathfinder._static_libs.find_libdevice import (
     get_libdevice_path as get_libdevice_path,
+)
+from cuda.pathfinder._static_libs.find_libdevice import (
+    locate_libdevice as locate_libdevice,
 )
 
 from cuda.pathfinder._version import __version__  # isort: skip  # noqa: F401

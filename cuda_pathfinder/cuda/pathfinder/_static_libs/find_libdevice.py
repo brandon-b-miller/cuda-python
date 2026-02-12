@@ -1,13 +1,28 @@
 # SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 # SPDX-License-Identifier: Apache-2.0
+from __future__ import annotations
+
 import functools
 import glob
 import os
+from dataclasses import dataclass
 
 from cuda.pathfinder._dynamic_libs.load_dl_common import DynamicLibNotFoundError as DynamicLibNotFoundError
 from cuda.pathfinder._dynamic_libs.supported_nvidia_libs import IS_WINDOWS
 from cuda.pathfinder._utils.env_vars import get_cuda_home_or_path
 from cuda.pathfinder._utils.find_sub_dirs import find_sub_dirs_all_sitepackages
+
+# Alias for libdevice-specific API (see __init__.py)
+LibdeviceNotFoundError = DynamicLibNotFoundError
+
+
+@dataclass
+class LocatedLibdevice:
+    """Path to libdevice bitcode and how it was found."""
+
+    abs_path: str
+    found_via: str
+
 
 # Site-package paths for libdevice (following SITE_PACKAGES_LIBDIRS pattern)
 SITE_PACKAGES_LIBDEVICE_DIRS = (
@@ -99,28 +114,48 @@ class _FindLibdevice:
         raise DynamicLibNotFoundError(f'Failure finding "{FILENAME}": {err}\n{att}')
 
 
-def get_libdevice_path() -> str | None:
-    """Get the path to libdevice*.bc, or None if not found."""
+@functools.cache
+def locate_libdevice() -> LocatedLibdevice | None:
+    """Locate libdevice*.bc and how it was found.
+
+    Returns:
+        LocatedLibdevice with abs_path and found_via, or None if not found.
+        found_via is one of: "site-packages", "conda", "CUDA_HOME", "supported_install_dir".
+    """
     finder = _FindLibdevice()
 
     abs_path = finder.try_site_packages()
-    if abs_path is None:
-        abs_path = finder.try_with_conda_prefix()
-    if abs_path is None:
-        abs_path = finder.try_with_cuda_home()
-    if abs_path is None:
-        abs_path = finder.try_common_paths()
+    if abs_path is not None:
+        return LocatedLibdevice(abs_path=abs_path, found_via="site-packages")
 
-    return abs_path
+    abs_path = finder.try_with_conda_prefix()
+    if abs_path is not None:
+        return LocatedLibdevice(abs_path=abs_path, found_via="conda")
+
+    abs_path = finder.try_with_cuda_home()
+    if abs_path is not None:
+        return LocatedLibdevice(abs_path=abs_path, found_via="CUDA_HOME")
+
+    abs_path = finder.try_common_paths()
+    if abs_path is not None:
+        return LocatedLibdevice(abs_path=abs_path, found_via="supported_install_dir")
+
+    return None
 
 
-@functools.cache
+def get_libdevice_path() -> str | None:
+    """Get the path to libdevice*.bc, or None if not found."""
+    loc = locate_libdevice()
+    return loc.abs_path if loc else None
+
+
 def find_libdevice() -> str:
     """Find the path to libdevice*.bc.
+
     Raises:
         DynamicLibNotFoundError: If libdevice.10.bc cannot be found
     """
-    path_or_none = get_libdevice_path()
-    if path_or_none is None:
+    loc = locate_libdevice()
+    if loc is None:
         raise DynamicLibNotFoundError(f"{FILENAME} not found")
-    return path_or_none
+    return loc.abs_path
