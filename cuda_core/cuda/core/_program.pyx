@@ -462,8 +462,8 @@ def _get_nvvm_module():
 
 def _find_libdevice_path():
     """Find libdevice*.bc for NVVM compilation using cuda.pathfinder."""
-    from cuda.pathfinder import get_libdevice_path
-    return get_libdevice_path()
+    from cuda.pathfinder import find_bitcode_lib
+    return find_bitcode_lib("device")
 
 
 cdef inline bint _process_define_macro_inner(list options, object macro) except? -1:
@@ -729,11 +729,6 @@ cdef object Program_compile_nvvm(Program self, str target_type, object logs):
     # Load libdevice if requested  - following numba-cuda
     if self._use_libdevice:
         libdevice_path = _find_libdevice_path()
-        if libdevice_path is None:
-            raise RuntimeError(
-                "use_libdevice=True but could not find libdevice.10.bc. "
-                "Ensure CUDA toolkit is installed."
-            )
         with open(libdevice_path, "rb") as f:
             libdevice_bytes = f.read()
         libdevice_ptr = <const char*>libdevice_bytes
