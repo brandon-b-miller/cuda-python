@@ -22,6 +22,7 @@ class LocatedBitcodeLib:
     name: str
     abs_path: str
     filename: str
+    found_via: str
 
 
 class _BitcodeLibInfo(TypedDict):  # Renamed: Config -> Info
@@ -67,16 +68,21 @@ class _FindBitcodeLib:
         self.error_messages: list[str] = []
         self.attachments: list[str] = []
 
-    def try_site_packages(self) -> str | None:
+    def try_with_site_packages(self) -> LocatedBitcodeLib | None:
         for rel_dir in self.site_packages_dirs:
             sub_dir = tuple(rel_dir.split("/"))
             for abs_dir in find_sub_dirs_all_sitepackages(sub_dir):
                 file_path = os.path.join(abs_dir, self.filename)
                 if os.path.isfile(file_path):
-                    return file_path
+                    return LocatedBitcodeLib(
+                        name=self.name,
+                        abs_path=file_path,
+                        filename=self.filename,
+                        found_via="site-packages",
+                    )
         return None
 
-    def try_with_conda_prefix(self) -> str | None:
+    def try_with_conda_prefix(self) -> LocatedBitcodeLib | None:
         conda_prefix = os.environ.get("CONDA_PREFIX")
         if not conda_prefix:
             return None
@@ -84,10 +90,15 @@ class _FindBitcodeLib:
         anchor = os.path.join(conda_prefix, "Library") if IS_WINDOWS else conda_prefix
         file_path = os.path.join(anchor, self.rel_path, self.filename)
         if os.path.isfile(file_path):
-            return file_path
+            return LocatedBitcodeLib(
+                name=self.name,
+                abs_path=file_path,
+                filename=self.filename,
+                found_via="conda",
+            )
         return None
 
-    def try_with_cuda_home(self) -> str | None:
+    def try_with_cuda_home(self) -> LocatedBitcodeLib | None:
         cuda_home = get_cuda_home_or_path()
         if cuda_home is None:
             self.error_messages.append("CUDA_HOME/CUDA_PATH not set")
@@ -95,7 +106,12 @@ class _FindBitcodeLib:
 
         file_path = os.path.join(cuda_home, self.rel_path, self.filename)
         if os.path.isfile(file_path):
-            return file_path
+            return LocatedBitcodeLib(
+                name=self.name,
+                abs_path=file_path,
+                filename=self.filename,
+                found_via="CUDA_HOME",
+            )
 
         _no_such_file_in_dir(
             os.path.join(cuda_home, self.rel_path),
@@ -115,20 +131,12 @@ def locate_bitcode_lib(name: str) -> LocatedBitcodeLib | None:
     """Locate a bitcode library by name."""
     finder = _FindBitcodeLib(name)
 
-    abs_path = finder.try_site_packages()
-    if abs_path is None:
-        abs_path = finder.try_with_conda_prefix()
-    if abs_path is None:
-        abs_path = finder.try_with_cuda_home()
-
-    if abs_path is None:
-        return None
-
-    return LocatedBitcodeLib(
-        name=name,
-        abs_path=abs_path,
-        filename=finder.filename,
-    )
+    result = finder.try_with_site_packages()
+    if result is None:
+        result = finder.try_with_conda_prefix()
+    if result is None:
+        result = finder.try_with_cuda_home()
+    return result
 
 
 @functools.cache

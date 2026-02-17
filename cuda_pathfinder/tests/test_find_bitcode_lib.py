@@ -20,6 +20,8 @@ SITE_PACKAGES_REL_DIR_CUDA13 = "nvidia/cuda_nvvm/nvvm/libdevice"
 STRICTNESS = os.environ.get("CUDA_PATHFINDER_TEST_FIND_NVIDIA_BITCODE_LIB_STRICTNESS", "see_what_works")
 assert STRICTNESS in ("see_what_works", "all_must_work")
 
+ALLOWED_FOUND_VIA = ("site-packages", "conda", "CUDA_HOME", "supported_install_dir")
+
 
 @pytest.fixture
 def clear_find_bitcode_lib_cache():
@@ -43,6 +45,7 @@ def _located_bitcode_lib_asserts(located_bitcode_lib):
     assert isinstance(located_bitcode_lib.abs_path, str)
     assert isinstance(located_bitcode_lib.filename, str)
     assert os.path.isfile(located_bitcode_lib.abs_path)
+    assert located_bitcode_lib.found_via in ALLOWED_FOUND_VIA
 
 
 @pytest.mark.parametrize("libname", SUPPORTED_BITCODE_LIBS)
@@ -82,6 +85,7 @@ def test_find_bitcode_lib_via_site_packages(monkeypatch, mocker, tmp_path, rel_d
     assert result.abs_path == expected_path
     assert result.name == "device"
     assert result.filename == FILENAME
+    assert result.found_via == "site-packages"
     assert os.path.isfile(result.abs_path)
 
 
@@ -106,6 +110,7 @@ def test_find_bitcode_lib_via_conda(monkeypatch, mocker, tmp_path):
     assert result is not None
     assert result.abs_path == expected_path
     assert os.path.isfile(result.abs_path)
+    assert result.found_via == "conda"
 
 
 @pytest.mark.usefixtures("clear_find_bitcode_lib_cache")
@@ -128,6 +133,7 @@ def test_find_bitcode_lib_via_cuda_home(monkeypatch, mocker, tmp_path):
     assert result is not None
     assert result.abs_path == expected_path
     assert os.path.isfile(result.abs_path)
+    assert result.found_via == "CUDA_HOME"
 
 
 @pytest.mark.usefixtures("clear_find_bitcode_lib_cache")
